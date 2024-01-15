@@ -57,7 +57,14 @@ func main() {
 	}
 	inputsScatter, _ := plotter.NewScatter(xys)
 
-	img := make(chan *image.RGBA, 1)
+	img := make(chan *image.RGBA, 1) // Have at most one image in the channel.
+	render := func(x *image.RGBA) {
+		select {
+		case <-img: // Drain the channel.
+			img <- x // Put the new image in.
+		case img <- x: // Or just put the new image in.
+		}
+	}
 	go func() {
 		w := startValueRange - rand.Float64()*2*startValueRange
 		b := startValueRange - rand.Float64()*2*startValueRange
@@ -70,16 +77,13 @@ func main() {
 			})
 			lossLines, _ := plotter.NewLine(loss)
 			if plotLoss {
-				select {
-				case img <- Plot(lossLines):
-				default:
-				}
+				render(Plot(lossLines))
 			} else {
 				const extra = (inputPointsMaxX - inputPointsMinX) / 10
 				xs := []float64{inputPointsMinX - extra, inputPointsMaxX + extra}
 				ys := inference(xs, w, b)
 				resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
-				img <- Plot(inputsScatter, resLine)
+				render(Plot(inputsScatter, resLine))
 			}
 			dw, db := dmsl(inputs, labels, y)
 			w += dw * learningRateW
