@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"math/rand"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -26,34 +30,44 @@ func Plot(ps ...plot.Plotter) *image.RGBA {
 }
 
 func main() {
+	csvFile, err := os.Open("data/house_prices.csv")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer csvFile.Close()
+
+	houses, err := readHousesFromCSV(csvFile)
+	if err != nil {
+		fmt.Println("Error reading houses from CSV:", err)
+		return
+	}
+
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Gradient descent")
 
 	const (
-		epochs              = 2000
-		printEveryNthEpochs = 100
-		learningRateW       = 0.5e-3
+		epochs              = 10000
+		printEveryNthEpochs = 500
+		learningRateW       = 0.1e-4
 		learningRateB       = 0.7
 
 		plotLoss = false // Loss curve: true, Resulting line: false.
 
-		inputPoints                      = 25
-		inputPointsMinX, inputPointsMaxX = 5, 20
-		inputPointsRandY                 = 1 // Makes sure Ys aren't on the line, but around it. Randomly.
+		inputPointsMinX, inputPointsMaxX = 0, 100
 		startValueRange                  = 1 // Start values for weights are in range [-startValueRange, startValueRange].
-
 	)
 
 	var (
 		inputs, labels []float64
 		xys            plotter.XYs
 	)
-	f := func(x float64) float64 { return 17*x - 1.75 }
-	for i := 0; i < inputPoints; i++ {
-		inputs = append(inputs, inputPointsMinX+(inputPointsMaxX-inputPointsMinX)*rand.Float64())
-		labels = append(labels, f(inputs[i])+inputPointsRandY*(1-rand.Float64()*2))
-		xys = append(xys, plotter.XY{X: inputs[i], Y: labels[i]})
+
+	for _, house := range houses {
+		inputs = append(inputs, house.Square)
+		labels = append(labels, house.Price)
+		xys = append(xys, plotter.XY{X: house.Square, Y: house.Price})
 	}
 	inputsScatter, _ := plotter.NewScatter(xys)
 
@@ -126,4 +140,56 @@ func dmsl(inputs, labels, y []float64) (dw, db float64) {
 		db += diff
 	}
 	return 2 * dw / float64(len(labels)), 2 * db / float64(len(labels))
+}
+
+type House struct {
+	Square    float64
+	HouseType string
+	Price     float64
+	WallColor string
+}
+
+func readHousesFromCSV(csvFile io.Reader) ([]House, error) {
+	houses := []House{}
+
+	reader := csv.NewReader(csvFile)
+	reader.Comma = ','
+
+	for i := 0; ; {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		if i == 0 {
+			i++
+			continue
+		}
+
+		square, err := strconv.ParseFloat(record[0], 64)
+		if err != nil {
+			return nil, err
+		}
+
+		houseType := record[1]
+
+		price, err := strconv.ParseFloat(record[2], 64)
+		if err != nil {
+			return nil, err
+		}
+
+		wallColor := record[3]
+
+		house := House{
+			Square:    square,
+			HouseType: houseType,
+			Price:     price,
+			WallColor: wallColor,
+		}
+
+		houses = append(houses, house)
+	}
+
+	return houses, nil
 }
