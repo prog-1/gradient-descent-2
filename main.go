@@ -1,129 +1,172 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"math/rand"
-	"time"
+	"os"
+	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg/draw"
-	"gonum.org/v1/plot/vg/vgimg"
 )
 
-func Plot(ps ...plot.Plotter) *image.RGBA {
-	p := plot.New()
-	p.Add(append([]plot.Plotter{
-		plotter.NewGrid(),
-	}, ps...)...)
-	img := image.NewRGBA(image.Rect(0, 0, 640, 480))
-	c := vgimg.NewWith(vgimg.UseImage(img))
-	p.Draw(draw.New(c))
-	return c.Image().(*image.RGBA)
+const (
+	screenWidth, screenHeight = 720, 480
+	randMin, randMax          = -10, 10
+	epochs, lr                = 1000000, 5e-6
+)
+
+// Function points are spawed along
+func f(x float64) float64 {
+	// return 0.5*x + 2
+	return 10*x - 5
+}
+
+// Inference for 1 argument(x)
+func i(x, w, b float64) float64 { return w*x + b }
+
+// Runs model on all the input data
+func inference(x []float64, w, b float64) (out []float64) {
+	for _, v := range x {
+		out = append(out, i(v, w, b))
+	}
+	return
+}
+
+func loss(labels, y []float64) float64 {
+	var errSum float64
+	for i := range labels {
+		errSum += (y[i] - labels[i]) * (y[i] - labels[i])
+	}
+	return errSum / float64(len(labels)) // For the sake of making numbers smaller -> better percievable
+}
+
+func gradient(labels, y, x []float64) (dw, db float64) {
+	// dw, db - Parial derivatives, w - weight, b - bias
+	for i := 0; i < len(labels); i++ {
+		dif := y[i] - labels[i]
+		dw += dif * x[i]
+		db += dif
+	}
+	n := float64(len(labels))
+	dw *= 2 / n
+	db *= 2 / n
+
+	return
+}
+
+func train(epochs int, inputs, labels []float64) (w, b float64) {
+	randFloat64 := func() float64 {
+		return randMin + rand.Float64()*(randMax-randMin)
+	}
+	w, b = randFloat64(), randFloat64()
+	// w, b = 1, 0
+	var dw, db float64
+	for i := 0; i < epochs; i++ {
+		dw, db = gradient(labels, inference(inputs, w, b), inputs)
+		w -= dw * lr
+		b -= db * lr
+		fmt.Println(w, b)
+	}
+	return
+}
+
+type House struct {
+	Square    float64
+	HouseType string
+	Price     float64
+	WallColor string
+}
+
+func readHousesFromCSV(csvFile io.Reader) ([]House, error) {
+	houses := []House{}
+
+	reader := csv.NewReader(csvFile)
+	reader.Comma = ','
+
+	for i := 0; ; {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		if i == 0 {
+			i++
+			continue
+		}
+
+		square, err := strconv.ParseFloat(record[0], 64)
+		if err != nil {
+			return nil, err
+		}
+
+		houseType := record[1]
+
+		price, err := strconv.ParseFloat(record[2], 64)
+		if err != nil {
+			return nil, err
+		}
+
+		wallColor := record[3]
+
+		house := House{
+			Square:    square,
+			HouseType: houseType,
+			Price:     price,
+			WallColor: wallColor,
+		}
+
+		houses = append(houses, house)
+	}
+
+	return houses, nil
 }
 
 func main() {
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	ebiten.SetWindowSize(640, 480)
-	ebiten.SetWindowTitle("Gradient descent")
-
-	const (
-		epochs              = 2000
-		printEveryNthEpochs = 100
-		learningRateW       = 0.5e-3
-		learningRateB       = 0.7
-
-		plotLoss = false // Loss curve: true, Resulting line: false.
-
-		inputPoints                      = 25
-		inputPointsMinX, inputPointsMaxX = 5, 20
-		inputPointsRandY                 = 1 // Makes sure Ys aren't on the line, but around it. Randomly.
-		startValueRange                  = 1 // Start values for weights are in range [-startValueRange, startValueRange].
-
-	)
-
-	var (
-		inputs, labels []float64
-		xys            plotter.XYs
-	)
-	f := func(x float64) float64 { return 17*x - 1.75 }
-	for i := 0; i < inputPoints; i++ {
-		inputs = append(inputs, inputPointsMinX+(inputPointsMaxX-inputPointsMinX)*rand.Float64())
-		labels = append(labels, f(inputs[i])+inputPointsRandY*(1-rand.Float64()*2))
-		xys = append(xys, plotter.XY{X: inputs[i], Y: labels[i]})
+	path := "data/house_prices.csv"
+	file, err1 := os.Open(path)
+	if err1 != nil {
+		log.Fatalf("Can't open file with path: %v", path)
 	}
-	inputsScatter, _ := plotter.NewScatter(xys)
-
-	img := make(chan *image.RGBA, 1) // Have at most one image in the channel.
-	render := func(x *image.RGBA) {
-		select {
-		case <-img: // Drain the channel.
-			img <- x // Put the new image in.
-		case img <- x: // Or just put the new image in.
-		}
+	defer file.Close()
+	houses, err2 := readHousesFromCSV(file)
+	if err2 != nil {
+		log.Fatal("Can't read Houses from CSV: %v", err2)
 	}
-	go func() {
-		w := startValueRange - rand.Float64()*2*startValueRange
-		b := startValueRange - rand.Float64()*2*startValueRange
-		var loss plotter.XYs
-		for i := 0; i < epochs; i++ {
-			y := inference(inputs, w, b)
-			loss = append(loss, plotter.XY{
-				X: float64(i),
-				Y: msl(labels, y),
-			})
-			lossLines, _ := plotter.NewLine(loss)
-			if plotLoss {
-				render(Plot(lossLines))
-			} else {
-				const extra = (inputPointsMaxX - inputPointsMinX) / 10
-				xs := []float64{inputPointsMinX - extra, inputPointsMaxX + extra}
-				ys := inference(xs, w, b)
-				resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
-				render(Plot(inputsScatter, resLine))
-			}
-			dw, db := dmsl(inputs, labels, y)
-			w += dw * learningRateW
-			b += db * learningRateB
-			//time.Sleep(30 * time.Millisecond)
-			if i%printEveryNthEpochs == 0 {
-				fmt.Printf(`Epoch #%d
-	loss: %.4f
-	dw: %.4f, db: %.4f
-	w : %.4f,  b: %.4f
-`, i, loss[len(loss)-1].Y, dw, db, w, b)
-			}
-		}
-		fmt.Println(w, b)
-	}()
+
+	var inputs, labels []float64
+	var points plotter.XYs
+	for i, house := range houses {
+		inputs = append(inputs, house.Square)
+		labels = append(labels, house.Price)
+		points = append(points, plotter.XY{X: inputs[i], Y: labels[i]})
+	}
+
+	// minInput, minLabel = math.Inf, math.Inf
+	// for _, label := range labels {
+	// 	if label < minLabel {
+	// 		minLabel = label
+	// 	}
+	// }
+	// for _, input := range inputs {
+	// 	if
+	// }
+
+	img := make(chan *image.RGBA, 1)
+	pointsScatter, _ := plotter.NewScatter(points)
+	fp := plotter.NewFunction(f) // f plot
+	w, b := train(epochs, inputs, labels)
+	fmt.Println(w, b)
+	ap := plotter.NewFunction(func(x float64) float64 { return w*x + b }) // approximating function plot
+	img <- Plot(pointsScatter, fp, ap)
 
 	if err := ebiten.RunGame(&App{Img: img}); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func inference(inputs []float64, w, b float64) (res []float64) {
-	for _, x := range inputs {
-		res = append(res, w*x+b)
-	}
-	return res
-}
-
-func msl(labels, y []float64) (loss float64) {
-	for i := range labels {
-		loss += (labels[i] - y[i]) * (labels[i] - y[i])
-	}
-	return loss / float64(len(labels))
-}
-
-func dmsl(inputs, labels, y []float64) (dw, db float64) {
-	for i := range labels {
-		diff := labels[i] - y[i]
-		dw += inputs[i] * diff
-		db += diff
-	}
-	return 2 * dw / float64(len(labels)), 2 * db / float64(len(labels))
 }

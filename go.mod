@@ -1,6 +1,6 @@
-module github.com/prog-1/gradient-descent
+module gradient-descent
 
-go 1.21.1
+go 1.21.6
 
 require (
 	github.com/hajimehoshi/ebiten/v2 v2.6.3
