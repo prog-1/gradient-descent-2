@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"gonum.org/v1/plot/plotter"
@@ -70,7 +71,6 @@ func train(epochs int, inputs, labels []float64) (w, b float64) {
 		dw, db = gradient(labels, inference(inputs, w, b), inputs)
 		w -= dw * lr
 		b -= db * lr
-		fmt.Println(w, b)
 	}
 	return
 }
@@ -148,23 +148,28 @@ func main() {
 		points = append(points, plotter.XY{X: inputs[i], Y: labels[i]})
 	}
 
-	// minInput, minLabel = math.Inf, math.Inf
-	// for _, label := range labels {
-	// 	if label < minLabel {
-	// 		minLabel = label
-	// 	}
-	// }
-	// for _, input := range inputs {
-	// 	if
-	// }
-
 	img := make(chan *image.RGBA, 1)
 	pointsScatter, _ := plotter.NewScatter(points)
 	fp := plotter.NewFunction(f) // f plot
-	w, b := train(epochs, inputs, labels)
-	fmt.Println(w, b)
-	ap := plotter.NewFunction(func(x float64) float64 { return w*x + b }) // approximating function plot
-	img <- Plot(pointsScatter, fp, ap)
+
+	randFloat64 := func() float64 {
+		return randMin + rand.Float64()*(randMax-randMin)
+	}
+	w, b := randFloat64(), randFloat64()
+	// w, b = 1, 0
+	var dw, db float64
+	go func() {
+		for i := 0; i < epochs; i++ {
+			time.Sleep(1 * time.Millisecond)
+			dw, db = gradient(labels, inference(inputs, w, b), inputs)
+			w -= dw * lr
+			b -= db * lr
+			fmt.Println(w, b)
+
+			ap := plotter.NewFunction(func(x float64) float64 { return w*x + b }) // approximating function plot
+			img <- Plot(pointsScatter, fp, ap)
+		}
+	}()
 
 	if err := ebiten.RunGame(&App{Img: img}); err != nil {
 		log.Fatal(err)
