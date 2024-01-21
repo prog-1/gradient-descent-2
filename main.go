@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"image"
 	"log"
 	"math/rand"
-	"time"
+	"os"
+	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"gonum.org/v1/plot"
@@ -26,33 +28,52 @@ func Plot(ps ...plot.Plotter) *image.RGBA {
 }
 
 func main() {
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	file, err := os.Open("C:/Programming/gradient-descent-2/data/house_prices.csv")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+	data, err := reader.ReadAll()
+	if err != nil {
+		log.Fatal(err)
+	}
+	var inputs, labels []float64
+	for i, row := range data {
+		if i == 0 {
+			continue
+		}
+		for j, col := range row {
+			if j == 0 {
+				v, err := strconv.ParseFloat(col, 64)
+				if err != nil {
+					log.Fatal(err)
+				}
+				inputs = append(inputs, v)
+			} else if j == 2 {
+				v, err := strconv.ParseFloat(col, 64)
+				if err != nil {
+					log.Fatal(err)
+				}
+				labels = append(labels, v)
+			}
+		}
+	}
+
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Gradient descent")
 
 	const (
-		epochs              = 2000
-		printEveryNthEpochs = 100
-		learningRateW       = 0.5e-3
-		learningRateB       = 0.7
-
-		plotLoss = false // Loss curve: true, Resulting line: false.
-
-		inputPoints                      = 25
-		inputPointsMinX, inputPointsMaxX = 5, 20
-		inputPointsRandY                 = 1 // Makes sure Ys aren't on the line, but around it. Randomly.
-		startValueRange                  = 1 // Start values for weights are in range [-startValueRange, startValueRange].
-
+		epochs                           = 2000
+		printEveryNthEpochs              = 100
+		learningRateW                    = 0.5e-3
+		learningRateB                    = 0.7
+		plotLoss                         = false
+		startValueRange                  = 1
+		inputPointsMinX, inputPointsMaxX = 0, 150
 	)
-
-	var (
-		inputs, labels []float64
-		xys            plotter.XYs
-	)
-	f := func(x float64) float64 { return 17*x - 1.75 }
-	for i := 0; i < inputPoints; i++ {
-		inputs = append(inputs, inputPointsMinX+(inputPointsMaxX-inputPointsMinX)*rand.Float64())
-		labels = append(labels, f(inputs[i])+inputPointsRandY*(1-rand.Float64()*2))
+	var xys plotter.XYs
+	for i := 0; i < len(inputs); i++ {
 		xys = append(xys, plotter.XY{X: inputs[i], Y: labels[i]})
 	}
 	inputsScatter, _ := plotter.NewScatter(xys)
@@ -88,13 +109,12 @@ func main() {
 			dw, db := dmsl(inputs, labels, y)
 			w += dw * learningRateW
 			b += db * learningRateB
-			//time.Sleep(30 * time.Millisecond)
 			if i%printEveryNthEpochs == 0 {
 				fmt.Printf(`Epoch #%d
-	loss: %.4f
-	dw: %.4f, db: %.4f
-	w : %.4f,  b: %.4f
-`, i, loss[len(loss)-1].Y, dw, db, w, b)
+				loss: %.4f
+				dw: %.4f, db: %.4f
+				w : %.4f,  b: %.4f
+				`, i, loss[len(loss)-1].Y, dw, db, w, b)
 			}
 		}
 		fmt.Println(w, b)
