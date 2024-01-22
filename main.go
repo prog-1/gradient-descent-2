@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"gonum.org/v1/plot/plotter"
@@ -17,8 +16,8 @@ import (
 
 const (
 	screenWidth, screenHeight = 720, 480
-	randMin, randMax          = -10, 10
-	epochs, lr                = 1000000, 5e-6
+	randMin, randMax          = 1500, 2000
+	epochs, lrw, lrb          = 1e6, 0.5e-4, 0.7
 )
 
 // Function points are spawed along
@@ -69,8 +68,8 @@ func train(epochs int, inputs, labels []float64) (w, b float64) {
 	var dw, db float64
 	for i := 0; i < epochs; i++ {
 		dw, db = gradient(labels, inference(inputs, w, b), inputs)
-		w -= dw * lr
-		b -= db * lr
+		w -= dw * lrw
+		b -= db * lrb
 	}
 	return
 }
@@ -152,22 +151,27 @@ func main() {
 	pointsScatter, _ := plotter.NewScatter(points)
 	fp := plotter.NewFunction(f) // f plot
 
-	randFloat64 := func() float64 {
-		return randMin + rand.Float64()*(randMax-randMin)
-	}
-	w, b := randFloat64(), randFloat64()
-	// w, b = 1, 0
-	var dw, db float64
 	go func() {
+		randFloat64 := func() float64 {
+			return randMin + rand.Float64()*(randMax-randMin)
+		}
+		w, b := randFloat64(), randFloat64()
+		var dw, db float64
 		for i := 0; i < epochs; i++ {
-			time.Sleep(1 * time.Millisecond)
+			// time.Sleep(1 * time.Millisecond)
 			dw, db = gradient(labels, inference(inputs, w, b), inputs)
-			w -= dw * lr
-			b -= db * lr
-			fmt.Println(w, b)
-
+			w -= dw * lrw
+			b -= db * lrb
+			if i%100 == 0 {
+				fmt.Printf("Epoch: %v, loss gradient: {%v,%v}\n", i, dw, db)
+			}
 			ap := plotter.NewFunction(func(x float64) float64 { return w*x + b }) // approximating function plot
-			img <- Plot(pointsScatter, fp, ap)
+			// Channels in go are blocking, i.e. until file are not read, new ones cannot be pasted
+			// If there is something in channel we are not rendering anything
+			select {
+			case img <- Plot(pointsScatter, fp, ap): // Executes on successful pasting into channel
+			default:
+			} // In case of just adding writing to channel, we'll wait until we can write. Here we ignore it.
 		}
 	}()
 
