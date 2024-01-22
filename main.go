@@ -16,7 +16,7 @@ func main() {
 	x, y := Get()
 	go func() {
 		// fmt.Println(x, y)
-		err := l.Train(x, y, 1e-4, 0.0003, 500000)
+		err := l.Train(x, y, 1e-4, 0.5, 5000)
 		fmt.Println(l.k, l.b)
 		if err != nil {
 			log.Fatal(err)
@@ -25,7 +25,7 @@ func main() {
 		for {
 			fmt.Print("Enter squares: ")
 			fmt.Scan(&tmp)
-			fmt.Println("You pobably can sell your hiuse for:", l.y(tmp))
+			fmt.Println("You pobably can sell your house for:", l.y(tmp))
 		}
 	}()
 	ebiten.SetWindowSize(640, 480)

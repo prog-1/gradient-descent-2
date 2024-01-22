@@ -21,7 +21,7 @@ func (l *line) Train(x, y []float64, lrk, lrb float64, epochs int) error {
 	t := make([]float64, len(x))
 	// fmt.Println(points)
 	for i := 0; i < epochs; i++ {
-		// time.Sleep(100 * time.Millisecond)
+		// time.Sleep(500 * time.Millisecond)
 		for j, v := range x {
 			t[j] = l.y(v)
 		}
@@ -43,7 +43,7 @@ func (l *line) Train(x, y []float64, lrk, lrb float64, epochs int) error {
 			log.Printf(`Epoch: %d/%d,
 			Loss %f
 			dk: %f, db: %f
-			k: %f, b:%f\n`, i, epochs, loss, dk, db, l.k, l.b)
+			`, i, epochs, loss, dk, db)
 		}
 		// fmt.Println(dk, db)
 	}
