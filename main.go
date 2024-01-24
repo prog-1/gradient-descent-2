@@ -39,6 +39,7 @@ func main() {
 		log.Fatal(err)
 	}
 	var inputs, labels []float64
+	types := make([][]float64, len(data)-1)
 	for i, row := range data {
 		if i == 0 {
 			continue
@@ -50,6 +51,22 @@ func main() {
 					log.Fatal(err)
 				}
 				inputs = append(inputs, v)
+			} else if j == 1 {
+				var v int
+				switch col {
+				case "Duplex":
+					v = 0
+				case "Detached":
+					v = 1
+				case "Semi-detached":
+					v = 2
+				case "Townhouse":
+					v = 3
+				case "Multi-family":
+					v = 4
+				}
+				types[i-1] = make([]float64, 5)
+				types[i-1][v] = 1
 			} else if j == 2 {
 				v, err := strconv.ParseFloat(col, 64)
 				if err != nil {
@@ -66,7 +83,7 @@ func main() {
 	const (
 		epochs                           = 2000
 		printEveryNthEpochs              = 100
-		learningRateW                    = 0.5e-3
+		learningRateW                    = 0.5e-4
 		learningRateB                    = 0.7
 		plotLoss                         = false
 		startValueRange                  = 1
@@ -87,11 +104,14 @@ func main() {
 		}
 	}
 	go func() {
-		w := startValueRange - rand.Float64()*2*startValueRange
+		w := make([]float64, 6)
+		for i := range w {
+			w[i] = startValueRange - rand.Float64()*2*startValueRange
+		}
 		b := startValueRange - rand.Float64()*2*startValueRange
 		var loss plotter.XYs
 		for i := 0; i < epochs; i++ {
-			y := inference(inputs, w, b)
+			y := inference(inputs, w, types, b)
 			loss = append(loss, plotter.XY{
 				X: float64(i),
 				Y: msl(labels, y),
@@ -102,12 +122,14 @@ func main() {
 			} else {
 				const extra = (inputPointsMaxX - inputPointsMinX) / 10
 				xs := []float64{inputPointsMinX - extra, inputPointsMaxX + extra}
-				ys := inference(xs, w, b)
+				ys := inference(xs, w, types, b)
 				resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
 				render(Plot(inputsScatter, resLine))
 			}
 			dw, db := dmsl(inputs, labels, y)
-			w += dw * learningRateW
+			for i := range w {
+				w[i] += dw * learningRateW
+			}
 			b += db * learningRateB
 			if i%printEveryNthEpochs == 0 {
 				fmt.Printf(`Epoch #%d
@@ -125,9 +147,9 @@ func main() {
 	}
 }
 
-func inference(inputs []float64, w, b float64) (res []float64) {
-	for _, x := range inputs {
-		res = append(res, w*x+b)
+func inference(inputs, w []float64, t [][]float64, b float64) (res []float64) {
+	for i, x := range inputs {
+		res = append(res, w[0]*t[i][0]+w[1]*t[i][1]+w[2]*t[i][2]+w[3]*t[i][3]+w[4]*t[i][4]+w[5]*x+b)
 	}
 	return res
 }
