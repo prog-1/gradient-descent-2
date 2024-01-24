@@ -12,26 +12,29 @@ const (
 )
 
 func main() {
-	l := NewLine()
+	l := NewLine(6)
 	x, y := Get()
 	go func() {
 		// fmt.Println(x, y)
-		err := l.Train(x, y, 1e-4, 0.5, 5000)
+		err := l.Train(x, y, 0.5e-4, 0.7, 500000)
 		fmt.Println(l.k, l.b)
 		if err != nil {
 			log.Fatal(err)
 		}
 		var tmp float64
+		var houseType string
 		for {
 			fmt.Print("Enter squares: ")
 			fmt.Scan(&tmp)
-			fmt.Println("You pobably can sell your house for:", l.y(tmp))
+			fmt.Println("Enter house type: ")
+			fmt.Scan(&houseType)
+			fmt.Println("You pobably can sell your house for:", l.y(append(enum(houseType), tmp)))
 		}
 	}()
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Gradient descent")
 
-	if err := ebiten.RunGame(&App{l, x, y}); err != nil {
+	if err := ebiten.RunGame(&App{l, x[0], y}); err != nil {
 		log.Fatal(err)
 	}
 }

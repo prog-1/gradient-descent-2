@@ -38,8 +38,8 @@ func (app *App) Draw(screen *ebiten.Image) {
 		points = append(points, plotter.XY{X: app.x[i], Y: app.y[i]})
 	}
 	pointsScatter, _ := plotter.NewScatter(points)
-	fp := plotter.NewFunction(app.l.y)
-	*screen = *ebiten.NewImageFromImage(Plot(pointsScatter, fp))
+	// fp := plotter.NewFunction(app.l.y())
+	*screen = *ebiten.NewImageFromImage(Plot(pointsScatter))
 }
 
 func (app *App) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
