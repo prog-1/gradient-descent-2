@@ -7,10 +7,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-const (
-	e = 1e-5
-)
-
 func main() {
 	l := NewLine(6)
 	x, y := Get()
@@ -21,6 +17,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		var tmp float64
 		var houseType string
 		for {

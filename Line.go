@@ -17,6 +17,12 @@ func (l *line) y(x []float64) float64 {
 	return sum + l.b
 }
 
+func (l *line) abdabc(x float64, b int) float64 {
+	a := make([]float64, 5)
+	a[b] = 1
+	return l.y(append(a, x))
+}
+
 func NewLine(num int) *line {
 	return &line{make([]float64, num), 0}
 }
@@ -38,7 +44,7 @@ func (l *line) Train(x [][]float64, y []float64, lrk, lrb float64, epochs int) e
 			for k := range x[j] {
 				if x[j][k] == 1 {
 					dk[k] += (y[j] - t[j]) * x[j][k]
-
+					dk[5] = (y[j] - t[j]) * x[j][5]
 				}
 			}
 			db += y[j] - t[j]
