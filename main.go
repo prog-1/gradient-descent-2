@@ -85,7 +85,7 @@ func main() {
 		epochs                           = 3000
 		printEveryNthEpochs              = 100
 		learningRateW                    = 0.16e-3
-		learningRateB                    = 0.2
+		learningRateB                    = 0.15
 		plotLoss                         = false
 		startValueRange                  = 1
 		inputPointsMinX, inputPointsMaxX = 0, 150
