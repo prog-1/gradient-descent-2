@@ -17,22 +17,21 @@ import (
 const (
 	screenWidth, screenHeight = 720, 480
 	randMin, randMax          = 1500, 2000
-	epochs, lrw, lrb          = 1e6, 0.5e-4, 0.7
+	epochs, lrb, weightCount  = 1e6, 0.7, 6
 )
+const lr = 0.5e-4
 
-// Function points are spawed along
-func f(x float64) float64 {
-	// return 0.5*x + 2
-	return 10*x - 5
+var learningRates = [weightCount]float64{lr, lr, lr, lr, lr, lr}
+
+// Prediction(inference) for one argument
+func p(x, w [weightCount]float64) float64 {
+	return w[0]*x[0] + w[1]*x[1] + w[2]*x[2] + w[3]*x[3] + w[4]*x[4] + w[5]*x[5]
 }
 
-// Inference for 1 argument(x)
-func i(x, w, b float64) float64 { return w*x + b }
-
 // Runs model on all the input data
-func inference(x []float64, w, b float64) (out []float64) {
-	for _, v := range x {
-		out = append(out, i(v, w, b))
+func inference(xs [][weightCount]float64, w [weightCount]float64) (ys []float64) {
+	for i := range xs {
+		ys = append(ys, p(xs[i], w))
 	}
 	return
 }
@@ -45,46 +44,39 @@ func loss(labels, y []float64) float64 {
 	return errSum / float64(len(labels)) // For the sake of making numbers smaller -> better percievable
 }
 
-func gradient(labels, y, x []float64) (dw, db float64) {
+func gradient(labels, y, x []float64) (dw [weightCount]float64) {
 	// dw, db - Parial derivatives, w - weight, b - bias
 	for i := 0; i < len(labels); i++ {
 		dif := y[i] - labels[i]
-		dw += dif * x[i]
-		db += dif
+		for j := 0; j < len(dw); j++ {
+			dw[j] += dif * x[j]
+		}
 	}
+
 	n := float64(len(labels))
-	dw *= 2 / n
-	db *= 2 / n
-
-	return
-}
-
-func train(epochs int, inputs, labels []float64) (w, b float64) {
-	randFloat64 := func() float64 {
-		return randMin + rand.Float64()*(randMax-randMin)
+	for i := range dw {
+		dw[i] *= 2 / n
 	}
-	w, b = randFloat64(), randFloat64()
-	// w, b = 1, 0
-	var dw, db float64
-	for i := 0; i < epochs; i++ {
-		dw, db = gradient(labels, inference(inputs, w, b), inputs)
-		w -= dw * lrw
-		b -= db * lrb
-	}
+
 	return
 }
 
 type House struct {
 	Square    float64
-	HouseType string
+	Type      string
 	Price     float64
 	WallColor string
 }
 
-func readHousesFromCSV(csvFile io.Reader) ([]House, error) {
+func readHousesFromCSV(path string) ([]House, error) {
+	file, err1 := os.Open(path)
+	if err1 != nil {
+		log.Fatalf("Can't open file with path: %v", path)
+	}
+	defer file.Close()
 	houses := []House{}
 
-	reader := csv.NewReader(csvFile)
+	reader := csv.NewReader(file)
 	reader.Comma = ','
 
 	for i := 0; ; {
@@ -116,7 +108,7 @@ func readHousesFromCSV(csvFile io.Reader) ([]House, error) {
 
 		house := House{
 			Square:    square,
-			HouseType: houseType,
+			Type:      houseType,
 			Price:     price,
 			WallColor: wallColor,
 		}
@@ -128,50 +120,74 @@ func readHousesFromCSV(csvFile io.Reader) ([]House, error) {
 }
 
 func main() {
-	path := "data/house_prices.csv"
-	file, err1 := os.Open(path)
-	if err1 != nil {
-		log.Fatalf("Can't open file with path: %v", path)
-	}
-	defer file.Close()
-	houses, err2 := readHousesFromCSV(file)
+	houses, err2 := readHousesFromCSV("data/house_prices.csv")
 	if err2 != nil {
-		log.Fatal("Can't read Houses from CSV: %v", err2)
+		log.Fatalf("Can't read Houses from CSV: %v", err2)
 	}
 
-	var inputs, labels []float64
+	var inputs [][weightCount]float64
+	var squares []float64
+	var labels []float64
 	var points plotter.XYs
 	for i, house := range houses {
-		inputs = append(inputs, house.Square)
+		inputs = append(inputs, func() (res [weightCount]float64) {
+			switch house.Type {
+			case "Duplex":
+				return [weightCount]float64{house.Square, 1, 0, 0, 0, 0}
+			case "Detached":
+				return [weightCount]float64{house.Square, 0, 1, 0, 0, 0}
+			case "Townhouse":
+				return [weightCount]float64{house.Square, 0, 0, 1, 0, 0}
+			case "Semi-detached":
+				return [weightCount]float64{house.Square, 0, 0, 0, 1, 0}
+			case "Multi-family":
+				return [weightCount]float64{house.Square, 0, 0, 0, 0, 1}
+			default:
+				log.Fatalf("Unknown house type: %v", house.Type)
+			}
+			return
+		}())
 		labels = append(labels, house.Price)
-		points = append(points, plotter.XY{X: inputs[i], Y: labels[i]})
+		squares = append(squares, house.Square)
+		points = append(points, plotter.XY{X: inputs[i][0], Y: labels[i]})
 	}
 
 	img := make(chan *image.RGBA, 1)
-	pointsScatter, _ := plotter.NewScatter(points)
-	fp := plotter.NewFunction(f) // f plot
+	pointScatter, _ := plotter.NewScatter(points)
 
 	go func() {
-		randFloat64 := func() float64 {
-			return randMin + rand.Float64()*(randMax-randMin)
+		var weights [weightCount]float64
+		for i := range weights {
+			weights[i] = randMin + rand.Float64()*(randMax-randMin)
 		}
-		w, b := randFloat64(), randFloat64()
-		var dw, db float64
-		for i := 0; i < epochs; i++ {
-			// time.Sleep(1 * time.Millisecond)
-			dw, db = gradient(labels, inference(inputs, w, b), inputs)
-			w -= dw * lrw
-			b -= db * lrb
-			if i%100 == 0 {
-				fmt.Printf("Epoch: %v, loss gradient: {%v,%v}\n", i, dw, db)
+		var weightDerivatives [weightCount]float64 // Weight derivatives = Values of gradient projection onto the weight axis
+		for epoch := 0; epoch < epochs; epoch++ {
+			weightDerivatives = gradient(labels, inference(inputs, weights), squares)
+			for j := 0; j < weightCount; j++ {
+				weights[j] -= weightDerivatives[j] * learningRates[j]
 			}
-			ap := plotter.NewFunction(func(x float64) float64 { return w*x + b }) // approximating function plot
-			// Channels in go are blocking, i.e. until file are not read, new ones cannot be pasted
-			// If there is something in channel we are not rendering anything
+			if epoch%100 == 0 {
+				fmt.Printf("Epoch: %v, loss gradient: {%v}\n", epoch, weightDerivatives)
+			}
+			// var plots []plot.Plotter
+			// for i := 1; i < weightCount; i++ {
+			// 	if i == 6 {
+			// 		fmt.Println("Pissess me off")
+			// 	}
+			// 	plots = append(plots, plotter.NewFunction(func(x float64) float64 {
+			// 		return weights[0]*x + weights[i]
+			// 	}))
+			// }
+			// plots = append(plots, pointScatter)
 			select {
-			case img <- Plot(pointsScatter, fp, ap): // Executes on successful pasting into channel
+			case img <- Plot(pointScatter,
+				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[1] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[2] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[3] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[4] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[5] })):
 			default:
-			} // In case of just adding writing to channel, we'll wait until we can write. Here we ignore it.
+			}
 		}
 	}()
 
