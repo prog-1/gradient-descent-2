@@ -84,8 +84,8 @@ func main() {
 	const (
 		epochs                           = 3000
 		printEveryNthEpochs              = 100
-		learningRateW                    = 0.16e-3
-		learningRateB                    = 0.15
+		learningRateW                    = 0.2e-3
+		learningRateB                    = 3.5
 		plotLoss                         = false
 		startValueRange                  = 1
 		inputPointsMinX, inputPointsMaxX = 0, 150
@@ -118,14 +118,13 @@ func main() {
 		}
 	}
 	go func() {
-		w := make([]float64, 6)
+		w := make([]float64, 10)
 		for i := range w {
 			w[i] = startValueRange - rand.Float64()*2*startValueRange
 		}
-		b := startValueRange - rand.Float64()*2*startValueRange
 		var loss plotter.XYs
 		for i := 0; i < epochs; i++ {
-			y := inference(inputs, w, types, b)
+			y := inference(inputs, w, types)
 			loss = append(loss, plotter.XY{
 				X: float64(i),
 				Y: msl(labels, y),
@@ -141,7 +140,7 @@ func main() {
 					houseTypes := make([][]float64, 2)
 					houseTypes[0], houseTypes[1] = make([]float64, 5), make([]float64, 5)
 					houseTypes[0][i], houseTypes[1][i] = 1, 1
-					ys := inference(xs, w, houseTypes, b)
+					ys := inference(xs, w, houseTypes)
 					resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
 					resLines = append(resLines, resLine)
 				}
@@ -152,28 +151,25 @@ func main() {
 				resLines[4].LineStyle.Color = color.RGBA{255, 0, 255, 255}
 				render(Plot(inputsScatter[0], inputsScatter[1], inputsScatter[2], inputsScatter[3], inputsScatter[4], resLines[0], resLines[1], resLines[2], resLines[3], resLines[4]))
 			}
-			var dw []float64
-			var db float64
+			var dw, db []float64
 			for i := 0; i < 5; i++ {
-				tmp, db := dmslT(inputs, labels, y, types, i)
-				dw = append(dw, tmp)
-				b += db * learningRateB
+				tmpW, tmpB := dmslT(inputs, labels, y, types, i)
+				dw = append(dw, tmpW)
+				db = append(db, tmpB)
 			}
-			tmp, db := dmsl(inputs, labels, y)
-			dw = append(dw, tmp)
-			b += db * learningRateB
-			for i := range w {
-				w[i] += dw[i] * learningRateW
+			for i := 0; i < 5; i++ {
+				w[i] += db[i] * learningRateB
+				w[i+5] += dw[i] * learningRateW
 			}
 			if i%printEveryNthEpochs == 0 {
 				fmt.Printf(`Epoch #%d
 				loss: %.4f
 				dw: %.4f, db: %.4f
-				w : %.4f,  b: %.4f
-				`, i, loss[len(loss)-1].Y, dw, db, w, b)
+				w : %.4f, b: %.4f
+				`, i, loss[len(loss)-1].Y, dw, db, w[:5], w[6:])
 			}
 		}
-		fmt.Println(w, b)
+		fmt.Println(w)
 	}()
 
 	if err := ebiten.RunGame(&App{Img: img}); err != nil {
@@ -181,9 +177,9 @@ func main() {
 	}
 }
 
-func inference(inputs, w []float64, t [][]float64, b float64) (res []float64) {
+func inference(inputs, w []float64, t [][]float64) (res []float64) {
 	for i, x := range inputs {
-		res = append(res, w[0]*t[i][0]+w[1]*t[i][1]+w[2]*t[i][2]+w[3]*t[i][3]+w[4]*t[i][4]+w[5]*x+b)
+		res = append(res, (w[0]*t[i][0]+w[1]*t[i][1]+w[2]*t[i][2]+w[3]*t[i][3]+w[4]*t[i][4])+(w[5]*t[i][0]+w[6]*t[i][1]+w[7]*t[i][2]+w[8]*t[i][3]+w[9]*t[i][4])*x)
 	}
 	return res
 }
@@ -202,15 +198,6 @@ func dmslT(inputs, labels, y []float64, types [][]float64, t int) (dw, db float6
 			dw += inputs[i] * diff
 			db += diff
 		}
-	}
-	return 2 * dw / float64(len(labels)), 2 * db / float64(len(labels))
-}
-
-func dmsl(inputs, labels, y []float64) (dw, db float64) {
-	for i := range labels {
-		diff := labels[i] - y[i]
-		dw += inputs[i] * diff
-		db += diff
 	}
 	return 2 * dw / float64(len(labels)), 2 * db / float64(len(labels))
 }
