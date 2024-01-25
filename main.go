@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"math/rand"
 	"os"
@@ -28,7 +29,7 @@ func Plot(ps ...plot.Plotter) *image.RGBA {
 }
 
 func main() {
-	file, err := os.Open("C:/Programming/gradient-descent-2/data/house_prices.csv")
+	file, err := os.Open("data/house_prices.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -81,19 +82,32 @@ func main() {
 	ebiten.SetWindowTitle("Gradient descent")
 
 	const (
-		epochs                           = 2000
+		epochs                           = 3000
 		printEveryNthEpochs              = 100
-		learningRateW                    = 0.5e-4
-		learningRateB                    = 0.7
+		learningRateW                    = 0.16e-3
+		learningRateB                    = 0.2
 		plotLoss                         = false
 		startValueRange                  = 1
 		inputPointsMinX, inputPointsMaxX = 0, 150
 	)
-	var xys plotter.XYs
+	xys := make([]plotter.XYs, 5)
 	for i := 0; i < len(inputs); i++ {
-		xys = append(xys, plotter.XY{X: inputs[i], Y: labels[i]})
+		for j := 0; j < 5; j++ {
+			if types[i][j] == 1 {
+				xys[j] = append(xys[j], plotter.XY{X: inputs[i], Y: labels[i]})
+			}
+		}
 	}
-	inputsScatter, _ := plotter.NewScatter(xys)
+	var inputsScatter []*plotter.Scatter
+	for i := 0; i < 5; i++ {
+		tmp, _ := plotter.NewScatter(xys[i])
+		inputsScatter = append(inputsScatter, tmp)
+	}
+	inputsScatter[0].Color = color.RGBA{255, 0, 0, 255}
+	inputsScatter[1].Color = color.RGBA{0, 255, 0, 255}
+	inputsScatter[2].Color = color.RGBA{0, 0, 255, 255}
+	inputsScatter[3].Color = color.RGBA{255, 255, 0, 255}
+	inputsScatter[4].Color = color.RGBA{255, 0, 255, 255}
 
 	img := make(chan *image.RGBA, 1) // Have at most one image in the channel.
 	render := func(x *image.RGBA) {
@@ -120,17 +134,37 @@ func main() {
 			if plotLoss {
 				render(Plot(lossLines))
 			} else {
+				var resLines []*plotter.Line
 				const extra = (inputPointsMaxX - inputPointsMinX) / 10
 				xs := []float64{inputPointsMinX - extra, inputPointsMaxX + extra}
-				ys := inference(xs, w, types, b)
-				resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
-				render(Plot(inputsScatter, resLine))
+				for i := 0; i < 5; i++ {
+					houseTypes := make([][]float64, 2)
+					houseTypes[0], houseTypes[1] = make([]float64, 5), make([]float64, 5)
+					houseTypes[0][i], houseTypes[1][i] = 1, 1
+					ys := inference(xs, w, houseTypes, b)
+					resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
+					resLines = append(resLines, resLine)
+				}
+				resLines[0].LineStyle.Color = color.RGBA{255, 0, 0, 255}
+				resLines[1].LineStyle.Color = color.RGBA{0, 255, 0, 255}
+				resLines[2].LineStyle.Color = color.RGBA{0, 0, 255, 255}
+				resLines[3].LineStyle.Color = color.RGBA{255, 255, 0, 255}
+				resLines[4].LineStyle.Color = color.RGBA{255, 0, 255, 255}
+				render(Plot(inputsScatter[0], inputsScatter[1], inputsScatter[2], inputsScatter[3], inputsScatter[4], resLines[0], resLines[1], resLines[2], resLines[3], resLines[4]))
 			}
-			dw, db := dmsl(inputs, labels, y)
-			for i := range w {
-				w[i] += dw * learningRateW
+			var dw []float64
+			var db float64
+			for i := 0; i < 5; i++ {
+				tmp, db := dmslT(inputs, labels, y, types, i)
+				dw = append(dw, tmp)
+				b += db * learningRateB
 			}
+			tmp, db := dmsl(inputs, labels, y)
+			dw = append(dw, tmp)
 			b += db * learningRateB
+			for i := range w {
+				w[i] += dw[i] * learningRateW
+			}
 			if i%printEveryNthEpochs == 0 {
 				fmt.Printf(`Epoch #%d
 				loss: %.4f
@@ -159,6 +193,17 @@ func msl(labels, y []float64) (loss float64) {
 		loss += (labels[i] - y[i]) * (labels[i] - y[i])
 	}
 	return loss / float64(len(labels))
+}
+
+func dmslT(inputs, labels, y []float64, types [][]float64, t int) (dw, db float64) {
+	for i := range labels {
+		if types[i][t] == 1 {
+			diff := labels[i] - y[i]
+			dw += inputs[i] * diff
+			db += diff
+		}
+	}
+	return 2 * dw / float64(len(labels)), 2 * db / float64(len(labels))
 }
 
 func dmsl(inputs, labels, y []float64) (dw, db float64) {
