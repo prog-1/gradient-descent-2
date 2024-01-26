@@ -20,9 +20,9 @@ const (
 	epochs, weightCount       = 1e6, 6
 )
 
-const lrb = 0.2e-2
+const lrb = 0.7e-3
 
-var learningRates = [weightCount]float64{0.2e-3, lrb, lrb, lrb, lrb, lrb}
+var learningRates = [weightCount]float64{0.1e-3, lrb, lrb, lrb, lrb, lrb}
 
 // Prediction(inference) for one argument
 func p(x, w [weightCount]float64) float64 {
@@ -133,7 +133,7 @@ func main() {
 		log.Fatalf("Can't read Houses from CSV: %v", err2)
 	}
 
-	var types [][weightCount - 1]float64
+	var inputs [][weightCount]float64
 	var squares []float64
 	var labels []float64
 	var points plotter.XYs
@@ -172,7 +172,7 @@ func main() {
 		for epoch := 0; epoch < epochs; epoch++ {
 			weightDerivatives = gradient(labels, inference(inputs, weights), squares, inputs)
 			for j := 0; j < weightCount; j++ {
-				weights[j] += weightDerivatives[j] * learningRates[j]
+				weights[j] -= weightDerivatives[j] * learningRates[j]
 			}
 			if epoch%100 == 0 {
 				fmt.Printf("Epoch: %v, loss gradient: {%v}\n", epoch, weightDerivatives)
