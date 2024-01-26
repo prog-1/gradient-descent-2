@@ -17,11 +17,12 @@ import (
 const (
 	screenWidth, screenHeight = 720, 480
 	randMin, randMax          = 1500, 2000
-	epochs, lrb, weightCount  = 1e6, 0.7, 6
+	epochs, weightCount       = 1e6, 6
 )
-const lr = 0.5e-4
 
-var learningRates = [weightCount]float64{lr, lr, lr, lr, lr, lr}
+const lrb = 0.2e-2
+
+var learningRates = [weightCount]float64{0.2e-3, lrb, lrb, lrb, lrb, lrb}
 
 // Prediction(inference) for one argument
 func p(x, w [weightCount]float64) float64 {
@@ -44,12 +45,19 @@ func loss(labels, y []float64) float64 {
 	return errSum / float64(len(labels)) // For the sake of making numbers smaller -> better percievable
 }
 
-func gradient(labels, y, x []float64) (dw [weightCount]float64) {
+func gradient(labels, y, x []float64, inputs [][weightCount]float64) (dw [weightCount]float64) {
 	// dw, db - Parial derivatives, w - weight, b - bias
 	for i := 0; i < len(labels); i++ {
 		dif := y[i] - labels[i]
-		for j := 0; j < len(dw); j++ {
-			dw[j] += dif * x[j]
+		dw[0] += dif * x[0]
+	}
+
+	for t := 1; t < weightCount; t++ {
+		for i := 0; i < len(labels); i++ {
+			if inputs[i][t] == 1 {
+				dif := y[i] - labels[i]
+				dw[t] += dif * x[t]
+			}
 		}
 	}
 
@@ -125,7 +133,7 @@ func main() {
 		log.Fatalf("Can't read Houses from CSV: %v", err2)
 	}
 
-	var inputs [][weightCount]float64
+	var types [][weightCount - 1]float64
 	var squares []float64
 	var labels []float64
 	var points plotter.XYs
@@ -162,23 +170,15 @@ func main() {
 		}
 		var weightDerivatives [weightCount]float64 // Weight derivatives = Values of gradient projection onto the weight axis
 		for epoch := 0; epoch < epochs; epoch++ {
-			weightDerivatives = gradient(labels, inference(inputs, weights), squares)
+			weightDerivatives = gradient(labels, inference(inputs, weights), squares, inputs)
 			for j := 0; j < weightCount; j++ {
-				weights[j] -= weightDerivatives[j] * learningRates[j]
+				weights[j] += weightDerivatives[j] * learningRates[j]
 			}
 			if epoch%100 == 0 {
 				fmt.Printf("Epoch: %v, loss gradient: {%v}\n", epoch, weightDerivatives)
+				fmt.Printf("Weights: %v\n", weights)
+				fmt.Println()
 			}
-			// var plots []plot.Plotter
-			// for i := 1; i < weightCount; i++ {
-			// 	if i == 6 {
-			// 		fmt.Println("Pissess me off")
-			// 	}
-			// 	plots = append(plots, plotter.NewFunction(func(x float64) float64 {
-			// 		return weights[0]*x + weights[i]
-			// 	}))
-			// }
-			// plots = append(plots, pointScatter)
 			select {
 			case img <- Plot(pointScatter,
 				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[1] }),
