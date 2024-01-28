@@ -18,10 +18,10 @@ const (
 	screenWidth, screenHeight = 720, 480
 	randMin, randMax          = 1500, 2000
 	epochs, typeCount         = 1e6, 5
-	lrw, lrb                  = 0.1e-3, 0.7e-3
+	lrw, lrb                  = 0.1e-2, 0.7e-3
 )
 
-var learningRates = [typeCount * 2]float64{lrw, lrw, lrw, lrw, lrw, lrb, lrb, lrb, lrb, lrb}
+var learningRates = [typeCount * 2]float64{lrw, lrw, lrw, lrw, lrw, 0.8e-1, 0.9, 0.5e-1, 0.9, 0.8e-1}
 
 // Prediction(inference) for one argument
 func p(x float64, t [typeCount]float64, w [typeCount * 2]float64) (y float64) {
@@ -45,7 +45,7 @@ func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [typeCount
 		for t := 0; t < typeCount; t++ {
 			if types[i][t] == 1 {
 				dif := y[i] - labels[i]
-				ds[t] += dif * x[t]
+				ds[t] += dif * x[i]
 				ds[t+typeCount] += dif
 			}
 		}
@@ -171,11 +171,11 @@ func main() {
 			}
 			select {
 			case img <- Plot(pointScatter,
-				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[1] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[2] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[3] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[4] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[5] })):
+				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[5] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[1]*x + weights[6] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[2]*x + weights[7] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[3]*x + weights[8] }),
+				plotter.NewFunction(func(x float64) float64 { return weights[4]*x + weights[9] })):
 			default:
 			}
 		}
