@@ -1,14 +1,11 @@
 package main
 
 import (
-	"encoding/csv"
 	"fmt"
 	"image"
-	"io"
+	"image/color"
 	"log"
 	"math/rand"
-	"os"
-	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"gonum.org/v1/plot/plotter"
@@ -18,8 +15,10 @@ const (
 	screenWidth, screenHeight = 720, 480
 	randMin, randMax          = 1500, 2000
 	epochs, typeCount         = 1e6, 5
-	lrw, lrb                  = 0.1e-2, 0.7e-3
+	lrw                       = 0.1e-2
 )
+
+var typeColors [typeCount]color.RGBA = [typeCount]color.RGBA{color.RGBA{255, 0, 0, 255}, color.RGBA{0, 255, 255, 255}, color.RGBA{0, 255, 0, 255}, color.RGBA{100, 200, 0, 255}}
 
 var learningRates = [typeCount * 2]float64{lrw, lrw, lrw, lrw, lrw, 0.8e-1, 0.9, 0.5e-1, 0.9, 0.8e-1}
 
@@ -59,64 +58,6 @@ func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [typeCount
 	return
 }
 
-type House struct {
-	Square    float64
-	Type      string
-	Price     float64
-	WallColor string
-}
-
-func readHousesFromCSV(path string) ([]House, error) {
-	file, err1 := os.Open(path)
-	if err1 != nil {
-		log.Fatalf("Can't open file with path: %v", path)
-	}
-	defer file.Close()
-	houses := []House{}
-
-	reader := csv.NewReader(file)
-	reader.Comma = ','
-
-	for i := 0; ; {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		if i == 0 {
-			i++
-			continue
-		}
-
-		square, err := strconv.ParseFloat(record[0], 64)
-		if err != nil {
-			return nil, err
-		}
-
-		houseType := record[1]
-
-		price, err := strconv.ParseFloat(record[2], 64)
-		if err != nil {
-			return nil, err
-		}
-
-		wallColor := record[3]
-
-		house := House{
-			Square:    square,
-			Type:      houseType,
-			Price:     price,
-			WallColor: wallColor,
-		}
-
-		houses = append(houses, house)
-	}
-
-	return houses, nil
-}
-
 func main() {
 	houses, err := readHousesFromCSV("data/house_prices.csv")
 	if err != nil {
@@ -126,11 +67,10 @@ func main() {
 	var types [][typeCount]float64
 	var squares []float64
 	var labels []float64
-	var points plotter.XYs
+	var points [typeCount]plotter.XYs
 	for i, house := range houses {
 		labels = append(labels, house.Price)
 		squares = append(squares, house.Square)
-		points = append(points, plotter.XY{X: squares[i], Y: labels[i]})
 		types = append(types, func() (res [typeCount]float64) {
 			switch house.Type {
 			case "Duplex":
@@ -148,10 +88,22 @@ func main() {
 			}
 			return
 		}())
+		for t := 0; t < typeCount; t++ {
+			if types[i][t] == 1 {
+				points[t] = append(points[t], plotter.XY{X: squares[i], Y: labels[i]})
+			}
+		}
 	}
 
 	img := make(chan *image.RGBA, 1)
-	pointScatter, _ := plotter.NewScatter(points)
+	var pointScatter [typeCount]*plotter.Scatter
+	for i := range pointScatter {
+		pointScatter[i], err = plotter.NewScatter(points[i])
+		if err != nil {
+			log.Fatalf("Failed to create scatter: %v", err)
+		}
+		pointScatter[i].Color = typeColors[i]
+	}
 
 	go func() {
 		var weights [typeCount * 2]float64
@@ -169,13 +121,21 @@ func main() {
 				fmt.Printf("Weights: %v\n", weights)
 				fmt.Println()
 			}
+
+			FunctionWithColor := func(f func(x float64) float64, color color.RGBA) *plotter.Function {
+				res := plotter.NewFunction(f)
+				res.Color = color
+				return res
+			}
+
 			select {
-			case img <- Plot(pointScatter,
-				plotter.NewFunction(func(x float64) float64 { return weights[0]*x + weights[5] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[1]*x + weights[6] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[2]*x + weights[7] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[3]*x + weights[8] }),
-				plotter.NewFunction(func(x float64) float64 { return weights[4]*x + weights[9] })):
+			case img <- Plot(
+				pointScatter[0], pointScatter[1], pointScatter[2], pointScatter[3], pointScatter[4],
+				FunctionWithColor(func(x float64) float64 { return weights[0]*x + weights[5] }, typeColors[0]),
+				FunctionWithColor(func(x float64) float64 { return weights[1]*x + weights[6] }, typeColors[1]),
+				FunctionWithColor(func(x float64) float64 { return weights[2]*x + weights[7] }, typeColors[2]),
+				FunctionWithColor(func(x float64) float64 { return weights[3]*x + weights[8] }, typeColors[3]),
+				FunctionWithColor(func(x float64) float64 { return weights[4]*x + weights[9] }, typeColors[4])):
 			default:
 			}
 		}
