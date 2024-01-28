@@ -14,15 +14,7 @@ func main() {
 
 	//####################### Points #########################
 
-	houses := getHouses()              //getting house data from CSV file
-	px := make([]float64, len(houses)) //Point x coordinates
-	py := make([]float64, len(houses)) //Point y coordinates
-
-	//Saving point coordinates from house data
-	for i, h := range houses {
-		px[i] = h.square
-		py[i] = h.price
-	}
+	px, py := groupHouses() //get squares and prices grouped by houseType
 
 	//####################### Ebiten ####################################
 
