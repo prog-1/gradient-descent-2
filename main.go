@@ -21,37 +21,32 @@ const (
 	lrw, lrb                  = 0.1e-3, 0.7e-3
 )
 
-var learningRates = [typeCount + 1]float64{0.1e-3, lrb, lrb, lrb, lrb, lrb}
+var learningRates = [typeCount * 2]float64{lrw, lrw, lrw, lrw, lrw, lrb, lrb, lrb, lrb, lrb}
 
 // Prediction(inference) for one argument
-func p(x float64, t [typeCount]float64, w [typeCount + 1]float64) (y float64) {
-	y = x * w[0]
+func p(x float64, t [typeCount]float64, w [typeCount * 2]float64) (y float64) {
 	for i := range t {
-		y += w[i+1] * t[i]
+		y += w[i]*t[i]*x + w[typeCount+i]*t[i]
 	}
+
 	return
 }
 
-// Runs model on all the input data
-func inference(xs []float64, types [][typeCount]float64, w [typeCount + 1]float64) (ys []float64) {
+func inference(xs []float64, types [][typeCount]float64, weights [typeCount * 2]float64) (ys []float64) {
 	for i := range xs {
-		ys = append(ys, p(xs[i], types[i], w))
+		ys = append(ys, p(xs[i], types[i], weights))
 	}
 	return
 }
 
-func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [typeCount + 1]float64) {
+func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [typeCount * 2]float64) {
 	// ds - weight partial DerivativeS
-	for i := 0; i < len(labels); i++ {
-		dif := y[i] - labels[i]
-		ds[0] += dif * x[0]
-	}
-
 	for i := 0; i < len(labels); i++ {
 		for t := 0; t < typeCount; t++ {
 			if types[i][t] == 1 {
 				dif := y[i] - labels[i]
-				ds[t+1] += dif * x[t]
+				ds[t] += dif * x[t]
+				ds[t+typeCount] += dif
 			}
 		}
 	}
@@ -159,14 +154,14 @@ func main() {
 	pointScatter, _ := plotter.NewScatter(points)
 
 	go func() {
-		var weights [typeCount + 1]float64
+		var weights [typeCount * 2]float64
 		for i := range weights {
 			weights[i] = randMin + rand.Float64()*(randMax-randMin)
 		}
-		var weightDerivatives [typeCount + 1]float64 // Weight derivatives = Values of gradient projection onto the weight axis
+		var weightDerivatives [typeCount * 2]float64 // Weight derivatives = Values of gradient projection onto the weight axis
 		for epoch := 0; epoch < epochs; epoch++ {
 			weightDerivatives = gradient(labels, inference(squares, types, weights), squares, types)
-			for j := 0; j < typeCount+1; j++ {
+			for j := 0; j < typeCount*2; j++ {
 				weights[j] -= weightDerivatives[j] * learningRates[j]
 			}
 			if epoch%100 == 0 {
