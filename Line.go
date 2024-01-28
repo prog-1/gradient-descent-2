@@ -43,7 +43,7 @@ func (l *line) Train(x [][]float64, y []float64, lrk, lrb float64, epochs int) e
 		for j := range x {
 			for k := range x[j] {
 				if x[j][k] == 1 {
-					dk[k] += (y[j] - t[j]) * x[j][k]
+					dk[k] += (y[j] - t[j])
 					dk[5] = (y[j] - t[j]) * x[j][5]
 				}
 			}
@@ -59,7 +59,7 @@ func (l *line) Train(x [][]float64, y []float64, lrk, lrb float64, epochs int) e
 		if i%100 == 0 {
 			log.Printf(`Epoch: %d/%d,
 			Loss %f
-			dk: %v, db: %f
+			dk: %v, db: %v
 			`, i, epochs, loss, dk, db)
 		}
 		// fmt.Println(dk, db)

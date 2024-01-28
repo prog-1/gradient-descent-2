@@ -30,8 +30,12 @@ func main() {
 	}()
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Gradient descent")
+	p := make([]float64, len(x))
+	for i := range p {
+		p[i] = x[i][5]
+	}
 
-	if err := ebiten.RunGame(&App{l, x[0], y}); err != nil {
+	if err := ebiten.RunGame(&App{l, p, y, 0}); err != nil {
 		log.Fatal(err)
 	}
 }

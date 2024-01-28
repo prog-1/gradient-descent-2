@@ -14,12 +14,13 @@ type App struct {
 	l *line
 	x []float64
 	y []float64
+	i int
 }
 
 func Plot(ps ...plot.Plotter) *image.RGBA {
 	p := plot.New()
 	p.X.Min = 0
-	p.X.Max = 300
+	p.X.Max = 100
 
 	p.Add(append([]plot.Plotter{
 		plotter.NewGrid(),
@@ -33,14 +34,17 @@ func Plot(ps ...plot.Plotter) *image.RGBA {
 func (app *App) Update() error { return nil }
 
 func (app *App) Draw(screen *ebiten.Image) {
+	app.i++
 	var points plotter.XYs
 	for i := 0; i < len(app.x); i++ {
 		points = append(points, plotter.XY{X: app.x[i], Y: app.y[i]})
 	}
 	pointsScatter, _ := plotter.NewScatter(points)
+
 	fp := plotter.NewFunction(func(x float64) float64 {
-		return app.l.abdabc(x, 1)
+		return app.l.abdabc(x, app.i%5)
 	})
+
 	*screen = *ebiten.NewImageFromImage(Plot(pointsScatter, fp))
 }
 
