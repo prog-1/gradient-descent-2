@@ -27,7 +27,7 @@ func PlotToImage(p *plot.Plot) *ebiten.Image {
 //###################################################################################
 
 // Returns new plot with given data
-func (a *App) updatePlot(k float64, b []float64, px, py [houseTypeCount][]float64) {
+func (a *App) updatePlot(k []float64, b []float64, px, py [houseTypeCount][]float64) {
 
 	//################# Initialization ##########################
 
@@ -48,8 +48,8 @@ func (a *App) updatePlot(k float64, b []float64, px, py [houseTypeCount][]float6
 
 		//Line points
 		lp := plotter.XYs{
-			{X: lineMin, Y: inference(lineMin, k, b[ht])},
-			{X: lineMax, Y: inference(lineMax, k, b[ht])},
+			{X: lineMin, Y: inference(lineMin, k[ht], b[ht])},
+			{X: lineMax, Y: inference(lineMax, k[ht], b[ht])},
 		}
 
 		line, _ := plotter.NewLine(lp) //creating line
