@@ -1,29 +1,34 @@
 package main
 
 import (
-	"image"
-
 	"github.com/hajimehoshi/ebiten/v2"
+	"gonum.org/v1/plot"
+)
+
+const (
+	sW = 1250
+	sH = 720
 )
 
 type App struct {
-	Img <-chan *image.RGBA
-	img *ebiten.Image
+	width, height int        //screen width & height
+	plot          *plot.Plot //global access to plot
 }
 
-func (app *App) Update() error { return nil }
+func (a *App) Update() error {
+	return nil
+}
 
-func (app *App) Draw(screen *ebiten.Image) {
-	select {
-	case img := <-app.Img:
-		app.img = ebiten.NewImageFromImage(img)
-	default:
-	}
-	if app.img != nil {
-		screen.DrawImage(app.img, nil)
+func (a *App) Draw(screen *ebiten.Image) {
+	if a.plot != nil { //to avoid crash at the start
+		screen.DrawImage(PlotToImage(a.plot), &ebiten.DrawImageOptions{}) //drawing plot
 	}
 }
 
-func (app *App) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return outsideWidth, outsideHeight
+func (a *App) Layout(inWidth, inHeight int) (outWidth, outHeight int) {
+	return a.width, a.height
+}
+
+func NewApp(width, height int) *App {
+	return &App{width: width, height: height}
 }
