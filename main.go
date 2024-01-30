@@ -15,38 +15,42 @@ const (
 	screenWidth, screenHeight       = 720, 480
 	randMin, randMax                = 1500, 2000
 	epochs, typeCount               = 1e6, 5
-	lrw                             = 0.1e-2
+	lrw                             = 0.1e-4
 	useWallColours, wallColourCount = true, typeCount
+	weightCount                     = typeCount*2 + 2
 )
 
-var typeColors [typeCount]color.RGBA = [typeCount]color.RGBA{color.RGBA{255, 0, 0, 255}, color.RGBA{0, 255, 255, 255}, color.RGBA{0, 255, 0, 255}, color.RGBA{100, 200, 0, 255}}
+var typeColors [typeCount]color.RGBA = [typeCount]color.RGBA{{255, 0, 0, 255}, {0, 255, 255, 255}, {0, 255, 0, 255}, {100, 200, 0, 255}}
 
-var learningRates = [typeCount * 2]float64{lrw, 0.1e-9, lrw, lrw, lrw, 0.8e-1, 0.9e-3, 0.5e-1, 0.9, 0.8e-1}
+var learningRates = [typeCount*2 + 2]float64{1e-4, lrw, lrw, 1e-4, lrw, lrw, 0.8e-5, 0.9e-5, 0.5e-6, 0.9e-6, 0.8e-6, 0.8e-6}
 
 // Prediction(inference) for one argument
-func p(x float64, t [typeCount]float64, w [typeCount * 2]float64) (y float64) {
+func p(x float64, t [typeCount]float64, w [weightCount]float64) (y float64) {
+	y = w[0]*x + w[typeCount+1]
 	for i := range t {
-		y += w[i]*t[i]*x + w[typeCount+i]*t[i]
+		y += w[i+1]*t[i]*x + w[typeCount+i+1]*t[i]
 	}
 
 	return
 }
 
-func inference(xs []float64, types [][typeCount]float64, weights [typeCount * 2]float64) (ys []float64) {
+func inference(xs []float64, types [][typeCount]float64, weights [weightCount]float64) (ys []float64) {
 	for i := range xs {
 		ys = append(ys, p(xs[i], types[i], weights))
 	}
 	return
 }
 
-func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [typeCount * 2]float64) {
+func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [weightCount]float64) {
 	// ds - weight partial DerivativeS
 	for i := 0; i < len(labels); i++ {
+		dif := y[i] - labels[i]
+		ds[0] += dif * x[i]
+		ds[typeCount+1] += dif
 		for t := 0; t < typeCount; t++ {
 			if types[i][t] == 1 {
-				dif := y[i] - labels[i]
-				ds[t] += dif * x[i]
-				ds[t+typeCount] += dif
+				ds[t+1] += dif * x[i]
+				ds[t+typeCount+1] += dif
 			}
 		}
 	}
@@ -128,14 +132,14 @@ func main() {
 	}
 
 	go func() {
-		var weights [typeCount * 2]float64
+		var weights [weightCount]float64
 		for i := range weights {
 			weights[i] = randMin + rand.Float64()*(randMax-randMin)
 		}
-		var weightDerivatives [typeCount * 2]float64 // Weight derivatives = Values of gradient projection onto the weight axis
+		var weightDerivatives [weightCount]float64 // Weight derivatives = Values of gradient projection onto the weight axis
 		for epoch := 0; epoch < epochs; epoch++ {
 			weightDerivatives = gradient(labels, inference(squares, types, weights), squares, types)
-			for j := 0; j < typeCount*2; j++ {
+			for j := 0; j < len(weights); j++ {
 				weights[j] -= weightDerivatives[j] * learningRates[j]
 			}
 			if epoch%100 == 0 {
