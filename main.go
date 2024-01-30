@@ -41,6 +41,7 @@ func main() {
 	}
 	var inputs, labels []float64
 	types := make([][]float64, len(data)-1)
+	colors := make([][]float64, len(data)-1)
 	for i, row := range data {
 		if i == 0 {
 			continue
@@ -74,6 +75,22 @@ func main() {
 					log.Fatal(err)
 				}
 				labels = append(labels, v)
+			} else if j == 3 {
+				var v int
+				switch col {
+				case "brown":
+					v = 0
+				case "yellow":
+					v = 1
+				case "white":
+					v = 2
+				case "blue":
+					v = 3
+				case "green":
+					v = 4
+				}
+				colors[i-1] = make([]float64, 5)
+				colors[i-1][v] = 1
 			}
 		}
 	}
@@ -85,11 +102,15 @@ func main() {
 		epochs                           = 3000
 		printEveryNthEpochs              = 100
 		learningRateW                    = 0.2e-3
-		learningRateB                    = 3.5
+		learningRateB                    = 0.5e-1
 		plotLoss                         = false
 		startValueRange                  = 1
 		inputPointsMinX, inputPointsMaxX = 0, 150
+		useWallColors                    = true
 	)
+	if useWallColors {
+		types = colors
+	}
 	xys := make([]plotter.XYs, 5)
 	for i := 0; i < len(inputs); i++ {
 		for j := 0; j < 5; j++ {
@@ -118,7 +139,7 @@ func main() {
 		}
 	}
 	go func() {
-		w := make([]float64, 10)
+		w := make([]float64, 12)
 		for i := range w {
 			w[i] = startValueRange - rand.Float64()*2*startValueRange
 		}
@@ -159,14 +180,16 @@ func main() {
 			}
 			for i := 0; i < 5; i++ {
 				w[i] += db[i] * learningRateB
-				w[i+5] += dw[i] * learningRateW
+				w[5] += db[i] * learningRateB
+				w[i+6] += dw[i] * learningRateW
+				w[11] += dw[i] * learningRateW
 			}
 			if i%printEveryNthEpochs == 0 {
 				fmt.Printf(`Epoch #%d
 				loss: %.4f
 				dw: %.4f, db: %.4f
 				w : %.4f, b: %.4f
-				`, i, loss[len(loss)-1].Y, dw, db, w[:5], w[6:])
+				`, i, loss[len(loss)-1].Y, dw, db, w[:6], w[6:])
 			}
 		}
 		fmt.Println(w)
@@ -179,7 +202,7 @@ func main() {
 
 func inference(inputs, w []float64, t [][]float64) (res []float64) {
 	for i, x := range inputs {
-		res = append(res, (w[0]*t[i][0]+w[1]*t[i][1]+w[2]*t[i][2]+w[3]*t[i][3]+w[4]*t[i][4])+(w[5]*t[i][0]+w[6]*t[i][1]+w[7]*t[i][2]+w[8]*t[i][3]+w[9]*t[i][4])*x)
+		res = append(res, (w[0]*t[i][0]+w[1]*t[i][1]+w[2]*t[i][2]+w[3]*t[i][3]+w[4]*t[i][4]+w[5])+(w[6]*t[i][0]+w[7]*t[i][1]+w[8]*t[i][2]+w[9]*t[i][3]+w[10]*t[i][4]+w[11])*x)
 	}
 	return res
 }
