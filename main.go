@@ -99,8 +99,8 @@ func main() {
 	ebiten.SetWindowTitle("Gradient descent")
 
 	const (
-		epochs                           = 3000
-		printEveryNthEpochs              = 100
+		epochs                           = 100000
+		printEveryNthEpochs              = 5000
 		learningRateW                    = 0.2e-3
 		learningRateB                    = 0.5e-1
 		plotLoss                         = false
@@ -151,27 +151,6 @@ func main() {
 				Y: msl(labels, y),
 			})
 			lossLines, _ := plotter.NewLine(loss)
-			if plotLoss {
-				render(Plot(lossLines))
-			} else {
-				var resLines []*plotter.Line
-				const extra = (inputPointsMaxX - inputPointsMinX) / 10
-				xs := []float64{inputPointsMinX - extra, inputPointsMaxX + extra}
-				for i := 0; i < 5; i++ {
-					houseTypes := make([][]float64, 2)
-					houseTypes[0], houseTypes[1] = make([]float64, 5), make([]float64, 5)
-					houseTypes[0][i], houseTypes[1][i] = 1, 1
-					ys := inference(xs, w, houseTypes)
-					resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
-					resLines = append(resLines, resLine)
-				}
-				resLines[0].LineStyle.Color = color.RGBA{255, 0, 0, 255}
-				resLines[1].LineStyle.Color = color.RGBA{0, 255, 0, 255}
-				resLines[2].LineStyle.Color = color.RGBA{0, 0, 255, 255}
-				resLines[3].LineStyle.Color = color.RGBA{255, 255, 0, 255}
-				resLines[4].LineStyle.Color = color.RGBA{255, 0, 255, 255}
-				render(Plot(inputsScatter[0], inputsScatter[1], inputsScatter[2], inputsScatter[3], inputsScatter[4], resLines[0], resLines[1], resLines[2], resLines[3], resLines[4]))
-			}
 			var dw, db []float64
 			for i := 0; i < 5; i++ {
 				tmpW, tmpB := dmslT(inputs, labels, y, types, i)
@@ -185,11 +164,32 @@ func main() {
 				w[11] += dw[i] * learningRateW
 			}
 			if i%printEveryNthEpochs == 0 {
+				if plotLoss {
+					render(Plot(lossLines))
+				} else {
+					var resLines []*plotter.Line
+					const extra = (inputPointsMaxX - inputPointsMinX) / 10
+					xs := []float64{inputPointsMinX - extra, inputPointsMaxX + extra}
+					for i := 0; i < 5; i++ {
+						houseTypes := make([][]float64, 2)
+						houseTypes[0], houseTypes[1] = make([]float64, 5), make([]float64, 5)
+						houseTypes[0][i], houseTypes[1][i] = 1, 1
+						ys := inference(xs, w, houseTypes)
+						resLine, _ := plotter.NewLine(plotter.XYs{{X: xs[0], Y: ys[0]}, {X: xs[1], Y: ys[1]}})
+						resLines = append(resLines, resLine)
+					}
+					resLines[0].LineStyle.Color = color.RGBA{255, 0, 0, 255}
+					resLines[1].LineStyle.Color = color.RGBA{0, 255, 0, 255}
+					resLines[2].LineStyle.Color = color.RGBA{0, 0, 255, 255}
+					resLines[3].LineStyle.Color = color.RGBA{255, 255, 0, 255}
+					resLines[4].LineStyle.Color = color.RGBA{255, 0, 255, 255}
+					render(Plot(inputsScatter[0], inputsScatter[1], inputsScatter[2], inputsScatter[3], inputsScatter[4], resLines[0], resLines[1], resLines[2], resLines[3], resLines[4]))
+				}
 				fmt.Printf(`Epoch #%d
 				loss: %.4f
 				dw: %.4f, db: %.4f
 				w : %.4f, b: %.4f
-				`, i, loss[len(loss)-1].Y, dw, db, w[:6], w[6:])
+				`, i, loss[len(loss)-1].Y, dw, db, w[6:], w[:6])
 			}
 		}
 		fmt.Println(w)
