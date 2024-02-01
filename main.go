@@ -8,15 +8,12 @@ import (
 )
 
 func main() {
-	l := NewLine(6)
+	l := NewLine(10)
 	x, y := Get()
 	go func() {
 		// fmt.Println(x, y)
-		err := l.Train(x, y, 0.5e-4, 0.7, 500000)
-		fmt.Println(l.k, l.b)
-		if err != nil {
-			log.Fatal(err)
-		}
+		l.Train(x, y, 1e-4, 1e-4, 5500000)
+		fmt.Println(l.w, l.b)
 
 		var tmp float64
 		var houseType string

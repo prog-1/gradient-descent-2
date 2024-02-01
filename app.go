@@ -11,7 +11,7 @@ import (
 )
 
 type App struct {
-	l *line
+	l *model
 	x []float64
 	y []float64
 	i int
