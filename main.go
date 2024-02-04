@@ -54,7 +54,7 @@ func (weights *weightRelated) adjustWeights(derivatives, learningRates *weightRe
 var learningRates weightRelated = weightRelated{
 	w0: 1e-4, b: 8e-7,
 	ws:  [typeCount]float64{1e-5, 1e-5, 1e-4, 1e-5, 1e-5},
-	bws: [typeCount]float64{0.9e-6, 0.5e-6, 0.9e-6, 0.8e-6, 0.8e-6},
+	bws: [typeCount]float64{0.9, 0.5, 0.5, 0.5, 0.5},
 }
 
 func prediction(x float64, t [typeCount]float64, weights *weightRelated) float64 {
@@ -184,8 +184,8 @@ func main() {
 				default:
 				}
 				fmt.Printf("Epoch: %v\n\n", epoch)
-				fmt.Printf("Derivatives:\nw0 = %v, ws = %v\nb = %v, bws = %v\n\n", derivatives.w0, derivatives.ws, derivatives.b, derivatives.bws)
 				fmt.Printf("Weights:\nw0 = %v, ws = %v\nb = %v, bws = %v\n\n", weights.w0, weights.ws, weights.b, weights.bws)
+				fmt.Printf("Derivatives:\nw0 = %v, ws = %v\nb = %v, bws = %v\n\n", derivatives.w0, derivatives.ws, derivatives.b, derivatives.bws)
 				fmt.Println()
 			}
 		}
