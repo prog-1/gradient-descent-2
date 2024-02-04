@@ -15,52 +15,80 @@ const (
 	screenWidth, screenHeight       = 720, 480
 	randMin, randMax                = 1500, 2000
 	epochs, typeCount               = 1e6, 5
-	lrw                             = 0.1e-4
 	useWallColours, wallColourCount = true, typeCount
-	weightCount                     = typeCount*2 + 2
 )
 
-var typeColors [typeCount]color.RGBA = [typeCount]color.RGBA{{255, 0, 0, 255}, {0, 255, 255, 255}, {0, 255, 0, 255}, {100, 200, 0, 255}}
+// var typeColors [typeCount]color.RGBA = [typeCount]color.RGBA{{0, 0, 255, 255}, /*Blue*/
+// 	{139, 69, 19, 255} /*Brown*/, {100, 100, 100, 255} /*White*/, {0, 255, 0, 255} /*Green*/, {255, 255, 0, 255} /*Yellow*/}
 
-var learningRates = [typeCount*2 + 2]float64{1e-4, lrw, lrw, 1e-4, lrw, lrw, 0.8e-5, 0.9e-5, 0.5e-6, 0.9e-6, 0.8e-6, 0.8e-6}
+var red = color.RGBA{255, 0, 0, 255}
+var typeColours = [typeCount]color.RGBA{red, red, red, red, red}
 
-// Prediction(inference) for one argument
-func p(x float64, t [typeCount]float64, w [weightCount]float64) (y float64) {
-	y = w[0]*x + w[typeCount+1]
+type weightRelated struct {
+	w0, b   float64
+	ws, bws [typeCount]float64
+}
+
+func randWeights() *weightRelated {
+	randFloat := func() float64 {
+		return randMin + rand.Float64()*(randMax-randMin)
+	}
+	randTypeCountArr := func() (arr [typeCount]float64) {
+		for i := 0; i < typeCount; i++ {
+			arr[i] = randFloat()
+		}
+		return arr
+	}
+	return &weightRelated{w0: randFloat(), b: randFloat(), ws: randTypeCountArr(), bws: randTypeCountArr()}
+}
+
+func (weights *weightRelated) adjustWeights(derivatives, learningRates *weightRelated) {
+	weights.w0 -= derivatives.w0 * learningRates.w0
+	weights.b -= derivatives.b * learningRates.b
+	for i := 0; i < len(weights.ws); i++ {
+		weights.ws[i] -= derivatives.ws[i] * learningRates.ws[i]
+		weights.bws[i] -= derivatives.bws[i] * learningRates.bws[i]
+	}
+}
+
+var learningRates weightRelated = weightRelated{
+	w0: 1e-4, b: 8e-7,
+	ws:  [typeCount]float64{1e-5, 1e-5, 1e-4, 1e-5, 1e-5},
+	bws: [typeCount]float64{0.9e-6, 0.5e-6, 0.9e-6, 0.8e-6, 0.8e-6},
+}
+
+func prediction(x float64, t [typeCount]float64, weights *weightRelated) float64 {
+	y := weights.w0*x + weights.b
 	for i := range t {
-		y += w[i+1]*t[i]*x + w[typeCount+i+1]*t[i]
+		y += weights.ws[i]*t[i]*x + weights.bws[i]*t[i]
 	}
 
-	return
+	return y
 }
 
-func inference(xs []float64, types [][typeCount]float64, weights [weightCount]float64) (ys []float64) {
+func inference(xs []float64, types [][typeCount]float64, weights *weightRelated) (ys []float64) {
 	for i := range xs {
-		ys = append(ys, p(xs[i], types[i], weights))
+		ys = append(ys, prediction(xs[i], types[i], weights))
 	}
 	return
 }
 
-func gradient(labels, y, x []float64, types [][typeCount]float64) (ds [weightCount]float64) {
-	// ds - weight partial DerivativeS
+func gradient(labels, y, x []float64, types [][typeCount]float64) *weightRelated {
+	var ds weightRelated // weight partial DerivativeS
+	n := float64(len(labels))
 	for i := 0; i < len(labels); i++ {
 		dif := y[i] - labels[i]
-		ds[0] += dif * x[i]
-		ds[typeCount+1] += dif
+		ds.w0 += 2 / n * dif * x[i]
+		ds.b += 2 / n * dif
 		for t := 0; t < typeCount; t++ {
 			if types[i][t] == 1 {
-				ds[t+1] += dif * x[i]
-				ds[t+typeCount+1] += dif
+				ds.ws[t] += 2 / n * dif * x[i]
+				ds.bws[t] += 2 / n * dif
 			}
 		}
 	}
 
-	n := float64(len(labels))
-	for i := range ds {
-		ds[i] *= 2 / n
-	}
-
-	return
+	return &ds
 }
 
 func main() {
@@ -80,6 +108,7 @@ func main() {
 		types = append(types, func() (res [typeCount]float64) {
 			switch house.Type {
 			case "Duplex":
+				// Arrays are pointless here since slices do not allocate more memory than is needed
 				return [typeCount]float64{1, 0, 0, 0, 0}
 			case "Detached":
 				return [typeCount]float64{0, 1, 0, 0, 0}
@@ -128,41 +157,36 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to create scatter: %v", err)
 		}
-		pointScatter[i].Color = typeColors[i]
+		pointScatter[i].Color = typeColours[i]
 	}
 
+	FunctionWithColor := func(f func(x float64) float64, color color.RGBA) *plotter.Function {
+		res := plotter.NewFunction(f)
+		res.Color = color
+		return res
+	}
 	go func() {
-		var weights [weightCount]float64
-		for i := range weights {
-			weights[i] = randMin + rand.Float64()*(randMax-randMin)
-		}
-		var weightDerivatives [weightCount]float64 // Weight derivatives = Values of gradient projection onto the weight axis
+		weights := randWeights()
+		var derivatives *weightRelated
 		for epoch := 0; epoch < epochs; epoch++ {
-			weightDerivatives = gradient(labels, inference(squares, types, weights), squares, types)
-			for j := 0; j < len(weights); j++ {
-				weights[j] -= weightDerivatives[j] * learningRates[j]
-			}
-			if epoch%100 == 0 {
-				fmt.Printf("Epoch: %v, loss gradient: {%v}\n", epoch, weightDerivatives)
-				fmt.Printf("Weights: %v\n", weights)
+			derivatives = gradient(labels, inference(squares, types, weights), squares, types)
+			weights.adjustWeights(derivatives, &learningRates)
+			if epoch%1000 == 0 {
+				//time.Sleep(50 * time.Millisecond)
+				select {
+				case img <- Plot(
+					pointScatter[0], pointScatter[1], pointScatter[2], pointScatter[3], pointScatter[4],
+					FunctionWithColor(func(x float64) float64 { return (weights.w0+weights.ws[0])*x + weights.b + weights.bws[0] }, typeColours[0]),
+					FunctionWithColor(func(x float64) float64 { return (weights.w0+weights.ws[1])*x + weights.b + weights.bws[1] }, typeColours[1]),
+					FunctionWithColor(func(x float64) float64 { return (weights.w0+weights.ws[2])*x + weights.b + weights.bws[2] }, typeColours[2]),
+					FunctionWithColor(func(x float64) float64 { return (weights.w0+weights.ws[3])*x + weights.b + weights.bws[3] }, typeColours[3]),
+					FunctionWithColor(func(x float64) float64 { return (weights.w0+weights.ws[4])*x + weights.b + weights.bws[4] }, typeColours[4])):
+				default:
+				}
+				fmt.Printf("Epoch: %v\n\n", epoch)
+				fmt.Printf("Derivatives:\nw0 = %v, ws = %v\nb = %v, bws = %v\n\n", derivatives.w0, derivatives.ws, derivatives.b, derivatives.bws)
+				fmt.Printf("Weights:\nw0 = %v, ws = %v\nb = %v, bws = %v\n\n", weights.w0, weights.ws, weights.b, weights.bws)
 				fmt.Println()
-			}
-
-			FunctionWithColor := func(f func(x float64) float64, color color.RGBA) *plotter.Function {
-				res := plotter.NewFunction(f)
-				res.Color = color
-				return res
-			}
-
-			select {
-			case img <- Plot(
-				pointScatter[0], pointScatter[1], pointScatter[2], pointScatter[3], pointScatter[4],
-				FunctionWithColor(func(x float64) float64 { return weights[0]*x + weights[5] }, typeColors[0]),
-				FunctionWithColor(func(x float64) float64 { return weights[1]*x + weights[6] }, typeColors[1]),
-				FunctionWithColor(func(x float64) float64 { return weights[2]*x + weights[7] }, typeColors[2]),
-				FunctionWithColor(func(x float64) float64 { return weights[3]*x + weights[8] }, typeColors[3]),
-				FunctionWithColor(func(x float64) float64 { return weights[4]*x + weights[9] }, typeColors[4])):
-			default:
 			}
 		}
 	}()
